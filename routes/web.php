@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\DepartmentController;
+use App\Http\Controllers\Admin\MasterDataController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Models\AuditLog;
@@ -32,6 +33,15 @@ Route::middleware(['auth', 'active'])->group(function (): void {
         Route::put('/users/{user}/password', [UserController::class, 'resetPassword'])->name('users.password.update');
         Route::resource('departments', DepartmentController::class)->except(['show', 'destroy'])->names('departments');
         Route::patch('/departments/{department}/status', [DepartmentController::class, 'updateStatus'])->name('departments.status.update');
+        Route::prefix('master/{resource}')->name('master.')->controller(MasterDataController::class)->group(function (): void {
+            Route::get('/', 'index')->name('index');
+            Route::get('/create', 'create')->name('create');
+            Route::post('/', 'store')->name('store');
+            Route::get('/{record}/edit', 'edit')->name('edit');
+            Route::put('/{record}', 'update')->name('update');
+            Route::patch('/{record}/status', 'updateStatus')->name('status.update');
+            Route::delete('/{record}', 'destroy')->name('destroy');
+        });
         Route::get('/audit-logs', function () {
             Gate::authorize('audit_logs.view');
 

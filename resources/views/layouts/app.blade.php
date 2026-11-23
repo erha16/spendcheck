@@ -15,6 +15,9 @@
                 <a href="{{ route('dashboard') }}" class="rounded-lg px-3 py-2 text-sm hover:bg-emerald-50">Dashboard</a>
                 @can('users.view')<a href="{{ route('admin.users.index') }}" class="rounded-lg px-3 py-2 text-sm hover:bg-emerald-50">Pengguna</a>@endcan
                 @can('departments.view')<a href="{{ route('admin.departments.index') }}" class="rounded-lg px-3 py-2 text-sm hover:bg-emerald-50">Unit kerja</a>@endcan
+                @foreach(['categories' => ['categories.view', 'Kategori'], 'subcategories' => ['subcategories.view', 'Subkategori'], 'activities' => ['activities.view', 'Kegiatan'], 'vendors' => ['vendors.view', 'Vendor'], 'cash-accounts' => ['cash_accounts.view', 'Akun kas'], 'fund-sources' => ['fund_sources.view', 'Sumber dana'], 'payment-methods' => ['payment_methods.view', 'Metode pembayaran']] as $resource => [$permission, $label])
+                    @can($permission)<a href="{{ route('admin.master.index', ['resource' => $resource]) }}" class="rounded-lg px-3 py-2 text-sm hover:bg-emerald-50">{{ $label }}</a>@endcan
+                @endforeach
                 @can('audit_logs.view')<a href="{{ route('admin.audit-logs.index') }}" class="rounded-lg px-3 py-2 text-sm hover:bg-emerald-50">Audit log</a>@endcan
             </nav>
         </aside>

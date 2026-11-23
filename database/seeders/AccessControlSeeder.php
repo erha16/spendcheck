@@ -25,6 +25,10 @@ class AccessControlSeeder extends Seeder
             'roles.assign' => ['Atur role pengguna', 'roles'], 'departments.view' => ['Lihat unit kerja', 'departments'],
             'departments.manage' => ['Kelola unit kerja', 'departments'], 'audit_logs.view' => ['Lihat audit log', 'audit_logs'],
         ];
+        foreach (['categories' => 'kategori', 'subcategories' => 'subkategori', 'activities' => 'kegiatan', 'vendors' => 'vendor', 'cash_accounts' => 'akun kas', 'fund_sources' => 'sumber dana', 'payment_methods' => 'metode pembayaran'] as $module => $label) {
+            $permissionDefinitions[$module.'.view'] = ['Lihat '.$label, $module];
+            $permissionDefinitions[$module.'.manage'] = ['Kelola '.$label, $module];
+        }
 
         $permissions = [];
         foreach ($permissionDefinitions as $name => [$displayName, $module]) {
