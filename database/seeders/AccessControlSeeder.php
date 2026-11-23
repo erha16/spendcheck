@@ -38,11 +38,27 @@ class AccessControlSeeder extends Seeder
         foreach ($roles as $name => [$displayName, $description]) {
             $role = Role::updateOrCreate(['name' => $name], ['display_name' => $displayName, 'description' => $description]);
             $assigned = match ($name) {
+                'admin_system', 'keuangan_sarpras' => [],
+                'petugas_sarpras' => ['categories.view', 'subcategories.view', 'activities.view', 'vendors.view', 'payment_methods.view'],
+                'driver' => ['activities.view'],
+                'kepala_sarpras', 'divisi_keuangan' => ['categories.view', 'subcategories.view', 'activities.view', 'vendors.view', 'cash_accounts.view', 'fund_sources.view', 'payment_methods.view'],
+                default => [],
+            };
+            $assigned = array_merge($assigned, match ($name) {
                 'admin_system' => array_keys($permissionDefinitions),
                 'petugas_sarpras', 'keuangan_sarpras', 'kepala_sarpras', 'divisi_keuangan' => ['departments.view'],
                 default => [],
-            };
-            $role->permissions()->sync(array_map(fn (string $permission) => $permissions[$permission]->id, $assigned));
+            });
+            if (in_array($name, ['admin_system', 'keuangan_sarpras'], true)) {
+                foreach (['categories', 'subcategories', 'activities', 'vendors', 'cash_accounts', 'fund_sources', 'payment_methods'] as $module) {
+                    $assigned[] = $module.'.view';
+                    $assigned[] = $module.'.manage';
+                }
+            }
+            $assignedIds = array_map(fn (string $permission): int => $permissions[$permission]->id, $assigned);
+            $phaseTwoIds = collect($permissions)->filter(fn (Permission $permission): bool => in_array($permission->module, ['categories', 'subcategories', 'activities', 'vendors', 'cash_accounts', 'fund_sources', 'payment_methods'], true))->pluck('id')->all();
+            $role->permissions()->detach(array_diff($phaseTwoIds, $assignedIds));
+            $role->permissions()->syncWithoutDetaching($assignedIds);
         }
     }
 }

@@ -50,6 +50,18 @@ class MasterDataController extends Controller
         return view('admin.master-data.form', ['definition' => $definition, 'resource' => $resource, 'record' => new $definition['model'], 'categories' => Category::query()->orderBy('name')->get(['id', 'name'])]);
     }
 
+    public function show(MasterDataCatalog $catalog, string $resource, int $record): View
+    {
+        $definition = $catalog->get($resource);
+        Gate::authorize($catalog->permission($resource, 'view'));
+        $model = $definition['model'];
+        $item = $resource === 'subcategories'
+            ? $model::query()->with('category')->findOrFail($record)
+            : $model::query()->findOrFail($record);
+
+        return view('admin.master-data.show', compact('definition', 'item', 'resource'));
+    }
+
     public function store(MasterDataRequest $request, MasterDataCatalog $catalog, AuditLogger $auditLogger, string $resource): RedirectResponse
     {
         $definition = $catalog->get($resource);

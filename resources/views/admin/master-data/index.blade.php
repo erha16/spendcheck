@@ -20,7 +20,7 @@
                 <tr>
                     @foreach($definition['columns'] as $column => $label)
                         @php($value = data_get($record, $column))
-                        <td class="max-w-xs px-4 py-4 {{ $loop->first ? 'font-medium' : '' }}">{{ $value instanceof \Illuminate\Support\Carbon ? $value->format('d M Y') : \Illuminate\Support\Str::limit((string) $value, 90) }}</td>
+                        <td class="max-w-xs px-4 py-4 {{ $loop->first ? 'font-medium' : '' }}">@if ($loop->first)<a class="text-emerald-800 hover:underline" href="{{ route('admin.master.show', ['resource' => $resource, 'record' => $record->id]) }}">{{ $value instanceof \Illuminate\Support\Carbon ? $value->format('d M Y') : \Illuminate\Support\Str::limit((string) $value, 90) }}</a>@else{{ $value instanceof \Illuminate\Support\Carbon ? $value->format('d M Y') : \Illuminate\Support\Str::limit((string) $value, 90) }}@endif</td>
                     @endforeach
                     <td class="px-4 py-4"><span class="rounded-full px-2.5 py-1 text-xs font-medium {{ $record->is_active ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600' }}">{{ $record->is_active ? 'Aktif' : 'Nonaktif' }}</span></td>
                     <td class="whitespace-nowrap px-4 py-4 text-right">
