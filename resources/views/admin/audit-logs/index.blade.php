@@ -1,0 +1,6 @@
+@extends('layouts.app')
+@section('title', 'Audit log')
+@section('breadcrumb', 'Audit log')
+@section('content')
+<h1 class="text-3xl font-semibold">Audit log</h1><p class="mt-2 text-sm text-slate-600">Catatan aktivitas penting; log tidak dapat diedit dari aplikasi.</p><div class="mt-6 overflow-x-auto rounded-xl border border-slate-200 bg-white"><table class="min-w-full text-left text-sm"><thead class="bg-slate-50 text-xs uppercase text-slate-500"><tr><th class="px-4 py-3">Waktu</th><th class="px-4 py-3">Pengguna</th><th class="px-4 py-3">Aktivitas</th><th class="px-4 py-3">Modul</th><th class="px-4 py-3">Deskripsi</th></tr></thead><tbody class="divide-y divide-slate-100">@forelse($auditLogs as $log)<tr><td class="whitespace-nowrap px-4 py-3">{{ $log->created_at?->format('d M Y H:i') }}</td><td class="px-4 py-3">{{ $log->user?->name ?? 'Sistem/anonim' }}</td><td class="px-4 py-3">{{ $log->action }}</td><td class="px-4 py-3">{{ $log->module }}</td><td class="px-4 py-3">{{ $log->description }}</td></tr>@empty<tr><td colspan="5" class="px-4 py-10 text-center text-slate-500">Belum ada aktivitas.</td></tr>@endforelse</tbody></table></div><div class="mt-5">{{ $auditLogs->links() }}</div>
+@endsection
