@@ -4,10 +4,13 @@ namespace Tests\Feature;
 
 use App\Models\AdvanceSettlement;
 use App\Models\AdvanceSettlementItem;
+use App\Models\CashAccount;
+use App\Models\CashMovement;
 use App\Models\Category;
 use App\Models\OperationalAdvance;
 use App\Models\Role;
 use App\Models\Subcategory;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AdvanceSettlementWorkflow;
 use Database\Seeders\AccessControlSeeder;
@@ -48,7 +51,7 @@ class AdvanceSettlementWorkflowTest extends TestCase
         $this->assertCount(2, $batch->items);
         $this->assertDatabaseCount('advance_settlement_attachments', 2);
         $this->assertSame('settlement_in_review', $advance->fresh()->status);
-        $this->assertDatabaseCount('cash_movements', 0);
+        $this->assertDatabaseCount('cash_movements', 1);
         $this->assertDatabaseHas('audit_logs', ['action' => 'advance_settlement_submitted']);
         $response->assertRedirect(route('operational-advances.show', $advance));
 
@@ -62,20 +65,20 @@ class AdvanceSettlementWorkflowTest extends TestCase
         $first = $this->submitBatch($advance, $recipient, $category, '600.00');
         $this->reviewItem($advance, $first, $first->items->first(), $finance, 'accepted');
 
-        $this->assertSame('partially_accounted', $advance->fresh()->status);
+        $this->assertSame('return_due', $advance->fresh()->status);
 
         $second = $this->submitBatch($advance->fresh(), $recipient, $category, '250.00');
         $this->assertSame(2, $second->batch_number);
         $this->reviewItem($advance, $second, $second->items->first(), $finance, 'accepted');
 
-        $this->assertSame('partially_accounted', $advance->fresh()->status);
+        $this->assertSame('return_due', $advance->fresh()->status);
         $summary = app(AdvanceSettlementWorkflow::class)->summary($advance->fresh());
         $this->assertSame('1000.00', $summary['disbursed']);
         $this->assertSame('850.00', $summary['accepted_expense']);
         $this->assertSame('150.00', $summary['outstanding']);
         $this->assertSame('0.00', $summary['overspend']);
         $this->assertDatabaseCount('advance_settlements', 2);
-        $this->assertDatabaseCount('cash_movements', 0);
+        $this->assertDatabaseCount('cash_movements', 1);
     }
 
     public function test_repeated_submission_key_returns_the_existing_batch_and_does_not_duplicate_items(): void
@@ -135,7 +138,7 @@ class AdvanceSettlementWorkflowTest extends TestCase
         $this->assertSame('accepted', $latest->fresh()->review_status);
         $this->assertSame('300.00', app(AdvanceSettlementWorkflow::class)->summary($advance->fresh())['accepted_expense']);
         $this->assertDatabaseCount('advance_settlement_items', 3);
-        $this->assertDatabaseCount('cash_movements', 0);
+        $this->assertDatabaseCount('cash_movements', 1);
     }
 
     public function test_rejected_and_revision_requested_items_are_excluded_from_final_expense(): void
@@ -149,7 +152,7 @@ class AdvanceSettlementWorkflowTest extends TestCase
         $summary = app(AdvanceSettlementWorkflow::class)->summary($advance->fresh());
         $this->assertSame('0.00', $summary['accepted_expense']);
         $this->assertSame('1000.00', $summary['outstanding']);
-        $this->assertSame('disbursed', $advance->fresh()->status);
+        $this->assertSame('return_due', $advance->fresh()->status);
     }
 
     public function test_approved_adjustment_replaces_accepted_amount_without_a_second_cash_movement(): void
@@ -177,9 +180,9 @@ class AdvanceSettlementWorkflowTest extends TestCase
         ])->assertRedirect();
 
         $this->assertSame('250.00', app(AdvanceSettlementWorkflow::class)->summary($advance->fresh())['accepted_expense']);
-        $this->assertSame('partially_accounted', $advance->fresh()->status);
+        $this->assertSame('return_due', $advance->fresh()->status);
         $this->assertDatabaseCount('advance_settlement_item_adjustments', 2);
-        $this->assertDatabaseCount('cash_movements', 0);
+        $this->assertDatabaseCount('cash_movements', 1);
     }
 
     public function test_recipient_is_isolated_and_read_only_roles_cannot_submit_or_review(): void
@@ -258,7 +261,7 @@ class AdvanceSettlementWorkflowTest extends TestCase
 
     private function advanceFor(User $recipient, string $status): OperationalAdvance
     {
-        return OperationalAdvance::factory()->create([
+        $advance = OperationalAdvance::factory()->create([
             'requester_user_id' => $recipient->id,
             'responsible_user_id' => $recipient->id,
             'created_by' => $recipient->id,
@@ -267,6 +270,39 @@ class AdvanceSettlementWorkflowTest extends TestCase
             'disbursed_amount' => '1000.00',
             'disbursed_at' => now()->subDay(),
         ]);
+
+        $cashAccount = CashAccount::factory()->create();
+        $transaction = new Transaction;
+        $transaction->forceFill([
+            'type' => 'advance_payout',
+            'occurred_at' => now()->subDay(),
+            'description' => 'Pencairan fixture '.$advance->number,
+            'responsible_user_id' => $recipient->id,
+            'created_by' => $recipient->id,
+            'payment_method_id' => null,
+            'source_cash_account_id' => $cashAccount->id,
+            'destination_cash_account_id' => null,
+            'vendor_id' => null,
+            'fund_source_id' => null,
+            'operational_advance_id' => $advance->id,
+            'total_amount' => '1000.00',
+            'status' => 'posted',
+            'posted_by' => $recipient->id,
+            'posted_at' => now()->subDay(),
+        ])->save();
+        CashMovement::create([
+            'cash_account_id' => $cashAccount->id,
+            'transaction_id' => $transaction->id,
+            'kind' => 'advance_payout',
+            'direction' => 'out',
+            'amount' => '1000.00',
+            'idempotency_key' => 'advance-payout-test:'.$advance->public_id,
+            'occurred_at' => $transaction->occurred_at,
+            'recorded_at' => now()->subDay(),
+            'created_by' => $recipient->id,
+        ]);
+
+        return $advance;
     }
 
     private function submitBatch(OperationalAdvance $advance, User $recipient, Category $category, string $amount): AdvanceSettlement

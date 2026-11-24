@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
-#[Fillable(['type', 'occurred_at', 'description', 'notes', 'responsible_user_id', 'payment_method_id', 'source_cash_account_id', 'destination_cash_account_id', 'vendor_id', 'fund_source_id', 'operational_advance_id'])]
+#[Fillable(['type', 'occurred_at', 'description', 'notes', 'responsible_user_id', 'payment_method_id', 'source_cash_account_id', 'destination_cash_account_id', 'vendor_id', 'fund_source_id', 'operational_advance_id', 'advance_event_key'])]
 class Transaction extends Model
 {
     /** @use HasFactory<TransactionFactory> */

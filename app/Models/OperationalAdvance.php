@@ -129,6 +129,11 @@ class OperationalAdvance extends Model
             ->latestOfMany('id');
     }
 
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(Transaction::class);
+    }
+
     public function attachments(): HasMany
     {
         return $this->hasMany(AdvanceAttachment::class);

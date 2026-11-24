@@ -21,6 +21,8 @@ class CashflowController extends Controller
         'transfer_out' => 'Transfer keluar',
         'opening_balance' => 'Saldo awal',
         'advance_payout' => 'Pencairan bon',
+        'advance_return' => 'Pengembalian sisa bon',
+        'advance_repay' => 'Pembayaran penggantian ke penerima',
         'reversal' => 'Reversal',
     ];
 

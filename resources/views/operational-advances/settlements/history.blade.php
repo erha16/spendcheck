@@ -5,7 +5,7 @@
         $decimalDisplay = fn (string $value): string => number_format((float) $value, 2, ',', '.');
     @endphp
     <div class="flex flex-wrap items-start justify-between gap-4">
-        <div><h2 class="text-xl font-semibold">Pertanggungjawaban bon</h2><p class="mt-1 text-sm text-slate-600">Realisasi hanya menjumlahkan item diterima dan adjustment yang disetujui. Tidak ada cash movement dari item.</p></div>
+        <div><h2 class="text-xl font-semibold">Pertanggungjawaban bon</h2><p class="mt-1 text-sm text-slate-600">Realisasi hanya menjumlahkan item diterima dan adjustment disetujui. Return dan repayment memengaruhi kas serta kewajiban, tanpa menambah beban.</p></div>
         @if($canSubmitSettlement)
             <a href="{{ route('operational-advances.settlements.create', $advance) }}" class="rounded-lg bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white">Ajukan batch</a>
         @endif
@@ -14,10 +14,12 @@
     <dl class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div class="rounded-lg bg-slate-50 p-3"><dt class="text-xs text-slate-500">Pencairan</dt><dd class="mt-1 font-semibold">Rp {{ $decimalDisplay($settlementSummary['disbursed']) }}</dd></div>
         <div class="rounded-lg bg-emerald-50 p-3"><dt class="text-xs text-emerald-800">Beban final diterima</dt><dd class="mt-1 font-semibold">Rp {{ $decimalDisplay($settlementSummary['accepted_expense']) }}</dd></div>
-        <div class="rounded-lg bg-amber-50 p-3"><dt class="text-xs text-amber-900">Sisa bon sebelum pengembalian</dt><dd class="mt-1 font-semibold">Rp {{ $decimalDisplay($settlementSummary['outstanding']) }}</dd></div>
-        <div class="rounded-lg bg-rose-50 p-3"><dt class="text-xs text-rose-900">Kelebihan pengeluaran</dt><dd class="mt-1 font-semibold">Rp {{ $decimalDisplay($settlementSummary['overspend']) }}</dd></div>
+        <div class="rounded-lg bg-sky-50 p-3"><dt class="text-xs text-sky-900">Pengembalian tercatat</dt><dd class="mt-1 font-semibold">Rp {{ $decimalDisplay($settlementSummary['returned']) }}</dd></div>
+        <div class="rounded-lg bg-amber-50 p-3"><dt class="text-xs text-amber-900">Dana wajib dikembalikan</dt><dd class="mt-1 font-semibold">Rp {{ $decimalDisplay($settlementSummary['return_outstanding']) }}</dd></div>
+        <div class="rounded-lg bg-violet-50 p-3"><dt class="text-xs text-violet-900">Payable dibayar</dt><dd class="mt-1 font-semibold">Rp {{ $decimalDisplay($settlementSummary['reimbursed']) }}</dd></div>
+        <div class="rounded-lg bg-rose-50 p-3"><dt class="text-xs text-rose-900">Payable organisasi</dt><dd class="mt-1 font-semibold">Rp {{ $decimalDisplay($settlementSummary['reimbursement_outstanding']) }}</dd></div>
     </dl>
-    <p class="text-xs text-slate-500">Sisa dan kelebihan dihitung dari pencairan dikurangi/ dibandingkan dengan item diterima. Pengembalian dan pembayaran organisasi belum termasuk pada subfase ini.</p>
+    <p class="text-xs text-slate-500">Saldo bon mengikutsertakan arus kas posted dan beban accepted. Pengajuan pengembalian yang belum diterima Keuangan belum mengubah saldo kas.</p>
 
     @forelse($advance->settlements->sortBy('batch_number') as $settlement)
         <article id="pertanggungjawaban-{{ $settlement->batch_number }}" class="space-y-4 rounded-xl border border-slate-200 p-4">

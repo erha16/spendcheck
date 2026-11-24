@@ -64,6 +64,7 @@
             @endif
 
             @if($advance->disbursed_at)
+                @include('operational-advances.reconciliation')
                 @include('operational-advances.settlements.history')
             @endif
 

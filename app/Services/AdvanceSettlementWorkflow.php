@@ -306,13 +306,13 @@ class AdvanceSettlementWorkflow
         User $actor,
         array $data,
     ): array {
-        $this->assertCanSubmit($advance, $actor, allowInReview: true);
+        $this->assertCanSubmit($advance, $actor, allowInReview: true, allowSettled: true);
 
         return DB::transaction(function () use ($advance, $item, $actor, $data): array {
             $lockedAdvance = OperationalAdvance::query()->lockForUpdate()->findOrFail($advance->id);
             $lockedItem = AdvanceSettlementItem::query()->whereHas('settlement', fn ($query) => $query->where('operational_advance_id', $lockedAdvance->id))
                 ->lockForUpdate()->findOrFail($item->id);
-            $this->assertCanSubmit($lockedAdvance, $actor, allowInReview: true);
+            $this->assertCanSubmit($lockedAdvance, $actor, allowInReview: true, allowSettled: true);
 
             $existing = AdvanceSettlementItemAdjustment::query()
                 ->where('adjustment_group_id', $data['adjustment_group_id'])
@@ -470,20 +470,35 @@ class AdvanceSettlementWorkflow
         });
     }
 
-    /** @return array{disbursed: string, accepted_expense: string, outstanding: string, overspend: string} */
+    /** @return array{disbursed: string, accepted_expense: string, returned: string, reimbursed: string, return_outstanding: string, reimbursement_outstanding: string, outstanding: string, overspend: string} */
     public function summary(OperationalAdvance $advance): array
     {
-        $disbursed = BigDecimal::of($advance->disbursed_amount ?? '0')->toScale(2);
+        $disbursed = $this->netCashEventAmount($advance->id, 'advance_payout', 'out');
         $acceptedExpense = $this->acceptedExpenseTotal($advance->id);
-        $outstanding = $disbursed->minus($acceptedExpense)->toScale(2);
+        $returned = $this->netCashEventAmount($advance->id, 'advance_return', 'in');
+        $reimbursed = $this->netCashEventAmount($advance->id, 'advance_repay', 'out');
+        $returnOutstanding = $disbursed->minus($acceptedExpense)->minus($returned)->toScale(2);
+        $reimbursementOutstanding = $acceptedExpense->plus($returned)->minus($disbursed)->minus($reimbursed)->toScale(2);
         $overspend = $acceptedExpense->minus($disbursed)->toScale(2);
+
+        $returnOutstanding = $returnOutstanding->isLessThan('0') ? BigDecimal::zero()->toScale(2) : $returnOutstanding;
+        $reimbursementOutstanding = $reimbursementOutstanding->isLessThan('0') ? BigDecimal::zero()->toScale(2) : $reimbursementOutstanding;
 
         return [
             'disbursed' => (string) $disbursed,
             'accepted_expense' => (string) $acceptedExpense,
-            'outstanding' => (string) ($outstanding->isLessThan('0') ? BigDecimal::zero()->toScale(2) : $outstanding),
+            'returned' => (string) $returned,
+            'reimbursed' => (string) $reimbursed,
+            'return_outstanding' => (string) $returnOutstanding,
+            'reimbursement_outstanding' => (string) $reimbursementOutstanding,
+            'outstanding' => (string) $returnOutstanding,
             'overspend' => (string) ($overspend->isLessThan('0') ? BigDecimal::zero()->toScale(2) : $overspend),
         ];
+    }
+
+    public function refreshAdvanceStatus(OperationalAdvance $advance, User $actor): void
+    {
+        $this->setAdvanceStatus($advance, $this->calculatedAdvanceStatus($advance), $actor);
     }
 
     private function assertSubmitPermission(OperationalAdvance $advance, User $actor): void
@@ -496,12 +511,20 @@ class AdvanceSettlementWorkflow
         }
     }
 
-    private function assertCanSubmit(OperationalAdvance $advance, User $actor, bool $allowInReview = false): void
+    private function assertCanSubmit(OperationalAdvance $advance, User $actor, bool $allowInReview = false, bool $allowSettled = false): void
     {
         $this->assertSubmitPermission($advance, $actor);
-        $allowedStatuses = [OperationalAdvanceStatus::Disbursed->value, OperationalAdvanceStatus::PartiallyAccounted->value];
+        $allowedStatuses = [
+            OperationalAdvanceStatus::Disbursed->value,
+            OperationalAdvanceStatus::PartiallyAccounted->value,
+            OperationalAdvanceStatus::ReturnDue->value,
+            OperationalAdvanceStatus::ReimbursementDue->value,
+        ];
         if ($allowInReview) {
             $allowedStatuses[] = OperationalAdvanceStatus::SettlementInReview->value;
+        }
+        if ($allowSettled) {
+            $allowedStatuses[] = OperationalAdvanceStatus::Settled->value;
         }
         if (! in_array($advance->status, $allowedStatuses, true)) {
             throw ValidationException::withMessages(['operational_advance' => 'Bon belum dapat menerima batch atau koreksi pertanggungjawaban.']);
@@ -549,8 +572,19 @@ class AdvanceSettlementWorkflow
             return OperationalAdvanceStatus::SettlementInReview->value;
         }
 
-        return $this->acceptedExpenseTotal($advance->id)->isGreaterThan('0')
-            ? OperationalAdvanceStatus::PartiallyAccounted->value
+        $summary = $this->summary($advance);
+        if (BigDecimal::of($summary['return_outstanding'])->isGreaterThan('0')) {
+            return OperationalAdvanceStatus::ReturnDue->value;
+        }
+        if (BigDecimal::of($summary['reimbursement_outstanding'])->isGreaterThan('0')) {
+            return OperationalAdvanceStatus::ReimbursementDue->value;
+        }
+        if (BigDecimal::of($summary['disbursed'])->isGreaterThan('0')) {
+            return OperationalAdvanceStatus::Settled->value;
+        }
+
+        return BigDecimal::of($summary['accepted_expense'])->isGreaterThan('0')
+            ? OperationalAdvanceStatus::ReimbursementDue->value
             : OperationalAdvanceStatus::Disbursed->value;
     }
 
@@ -565,7 +599,7 @@ class AdvanceSettlementWorkflow
         $this->auditLogger->record(
             'operational_advance_settlement_status_changed',
             'operational_advances',
-            'Status bon diperbarui berdasarkan item pertanggungjawaban dan batch yang masih terbuka.',
+            'Status bon diperbarui berdasarkan item accepted dan kewajiban kas yang masih terbuka.',
             $advance,
             ['status' => $previousStatus],
             ['status' => $status],
@@ -590,6 +624,24 @@ class AdvanceSettlementWorkflow
         }
 
         return $total;
+    }
+
+    private function netCashEventAmount(int $advanceId, string $type, string $direction): BigDecimal
+    {
+        $amount = DB::table('cash_movements')
+            ->join('transactions', 'transactions.id', '=', 'cash_movements.transaction_id')
+            ->where('transactions.operational_advance_id', $advanceId)
+            ->where('transactions.type', $type)
+            ->whereIn('transactions.status', ['posted', 'reversed'])
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN cash_movements.direction = ? THEN cash_movements.amount ELSE -cash_movements.amount END), 0) as net_amount',
+                [$direction],
+            )
+            ->value('net_amount');
+
+        $netAmount = BigDecimal::of((string) ($amount ?? '0'))->toScale(2);
+
+        return $netAmount->isLessThan('0') ? BigDecimal::zero()->toScale(2) : $netAmount;
     }
 
     private function effectiveItemAmount(AdvanceSettlementItem $item): BigDecimal

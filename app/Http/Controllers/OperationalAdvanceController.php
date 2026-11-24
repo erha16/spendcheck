@@ -19,6 +19,7 @@ use App\Models\User;
 use App\Services\AdvanceSettlementWorkflow;
 use App\Services\OperationalAdvanceDisbursementService;
 use App\Services\OperationalAdvanceWorkflow;
+use Brick\Math\BigDecimal;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -26,6 +27,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -96,6 +98,8 @@ class OperationalAdvanceController extends Controller
         $canSubmitSettlement = in_array($operationalAdvance->status, [
             OperationalAdvanceStatus::Disbursed->value,
             OperationalAdvanceStatus::PartiallyAccounted->value,
+            OperationalAdvanceStatus::ReturnDue->value,
+            OperationalAdvanceStatus::ReimbursementDue->value,
         ], true) && (($operationalAdvance->responsible_user_id === $request->user()->id
             && $request->user()->can('operational_advances.submit'))
             || ($request->user()->hasRole('keuangan_sarpras') && $request->user()->can('operational_advances.settle')));
@@ -117,11 +121,33 @@ class OperationalAdvanceController extends Controller
             && $operationalAdvance->payoutTransaction !== null;
         $auditLogs = AuditLog::query()->with('user')->where('subject_type', $operationalAdvance->getMorphClass())
             ->where('subject_id', $operationalAdvance->id)->latest('created_at')->get();
+        $settlementSummary = $settlementWorkflow->summary($operationalAdvance);
+        $isFinance = $request->user()->hasRole('keuangan_sarpras') && ! $operationalAdvance->isParticipant($request->user());
+        $canSubmitReturn = (int) $operationalAdvance->responsible_user_id === (int) $request->user()->id
+            && $request->user()->can('operational_advances.submit')
+            && in_array($operationalAdvance->status, [
+                OperationalAdvanceStatus::Disbursed->value,
+                OperationalAdvanceStatus::PartiallyAccounted->value,
+                OperationalAdvanceStatus::SettlementInReview->value,
+                OperationalAdvanceStatus::ReturnDue->value,
+                OperationalAdvanceStatus::ReimbursementDue->value,
+            ], true)
+            && BigDecimal::of($settlementSummary['return_outstanding'])->isGreaterThan('0');
+        $canReceiveReturn = $isFinance && $request->user()->can('operational_advances.return')
+            && $request->user()->can('transactions.post');
+        $canPayReimbursement = $isFinance && $request->user()->can('operational_advances.reimburse')
+            && $request->user()->can('transactions.post')
+            && BigDecimal::of($settlementSummary['reimbursement_outstanding'])->isGreaterThan('0');
+        $canCorrectCashEvents = $isFinance && $request->user()->can('transactions.correct')
+            && $request->user()->can('transactions.post')
+            && ($request->user()->can('operational_advances.return') || $request->user()->can('operational_advances.reimburse'));
+        $operationalAdvance->load('transactions.creator:id,name', 'transactions.reviewer:id,name', 'transactions.poster:id,name',
+            'transactions.sourceCashAccount:id,name', 'transactions.destinationCashAccount:id,name', 'transactions.movements');
 
         return view('operational-advances.show', [
             'advance' => $operationalAdvance,
             'auditLogs' => $auditLogs,
-            'settlementSummary' => $settlementWorkflow->summary($operationalAdvance),
+            'settlementSummary' => $settlementSummary,
             'canSubmitSettlement' => $canSubmitSettlement,
             'canReviewSettlements' => $canReviewSettlements,
             'canSubmitSettlementRevision' => $request->user()->can('operational_advances.submit')
@@ -134,8 +160,15 @@ class OperationalAdvanceController extends Controller
                 ->orderBy('name')->get(),
             'settlementActivities' => Activity::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'canDisburse' => $canDisburse,
+            'canSubmitReturn' => $canSubmitReturn,
+            'canReceiveReturn' => $canReceiveReturn,
+            'canPayReimbursement' => $canPayReimbursement,
+            'canCorrectCashEvents' => $canCorrectCashEvents,
+            'cashEventTransactions' => $operationalAdvance->transactions->whereIn('type', ['advance_return', 'advance_repay'])->sortByDesc('created_at'),
+            'cashEventSubmissionKey' => (string) Str::uuid7(),
+            'cashEventPaymentKey' => (string) Str::uuid7(),
             'canCorrectPayout' => $canCorrectPayout,
-            'disbursementCashAccounts' => $canDisburse || $canCorrectPayout
+            'disbursementCashAccounts' => $canDisburse || $canCorrectPayout || $canReceiveReturn || $canPayReimbursement || $canCorrectCashEvents
                 ? CashAccount::query()->where('is_active', true)->orderBy('name')->get(['id', 'name'])
                 : collect(),
             'canEdit' => in_array($operationalAdvance->status, ['draft', 'revision_requested'], true)
