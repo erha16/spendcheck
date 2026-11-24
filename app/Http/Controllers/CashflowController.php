@@ -20,6 +20,7 @@ class CashflowController extends Controller
         'transfer_in' => 'Transfer masuk',
         'transfer_out' => 'Transfer keluar',
         'opening_balance' => 'Saldo awal',
+        'advance_payout' => 'Pencairan bon',
         'reversal' => 'Reversal',
     ];
 

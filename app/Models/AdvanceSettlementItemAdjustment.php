@@ -43,7 +43,19 @@ class AdvanceSettlementItemAdjustment extends Model
             $adjustment->adjustment_group_id ??= (string) Str::uuid7();
         });
 
-        static::updating(fn (): never => throw new LogicException('Adjustment bon bersifat append-only.'));
+        static::updating(function (AdvanceSettlementItemAdjustment $adjustment): void {
+            $allowedReviewFields = ['status', 'reviewed_by', 'reviewed_at', 'review_reason'];
+            $dirtyFields = array_keys($adjustment->getDirty());
+            $isReviewTransition = $adjustment->getOriginal('status') === 'pending'
+                && in_array($adjustment->status, ['approved', 'rejected'], true)
+                && $adjustment->reviewed_by !== null
+                && $adjustment->reviewed_at !== null
+                && array_diff($dirtyFields, $allowedReviewFields) === [];
+
+            if (! $isReviewTransition) {
+                throw new LogicException('Nilai adjustment bersifat append-only; hanya keputusan review satu kali yang dapat dicatat.');
+            }
+        });
         static::deleting(fn (): never => throw new LogicException('Adjustment bon bersifat append-only.'));
     }
 
@@ -65,5 +77,25 @@ class AdvanceSettlementItemAdjustment extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(Category::class);
+    }
+
+    public function subcategory(): BelongsTo
+    {
+        return $this->belongsTo(Subcategory::class);
+    }
+
+    public function activity(): BelongsTo
+    {
+        return $this->belongsTo(Activity::class);
+    }
+
+    public function vendor(): BelongsTo
+    {
+        return $this->belongsTo(Vendor::class);
     }
 }

@@ -109,6 +109,7 @@ class TransactionController extends Controller
         $this->authorizeView($request->user(), $transaction);
         abort_unless($request->user()->hasRole('keuangan_sarpras'), 403);
         Gate::authorize('transactions.correct');
+        abort_unless($transaction->type !== 'advance_payout', 404);
         abort_unless($transaction->status === 'posted' && ! $transaction->replacements()->exists(), 404);
         $transaction->load(['items', 'attachments']);
         $viewData = [...$this->formData($request->user()), 'transaction' => $transaction, 'type' => $transaction->type, 'correctionOriginal' => $transaction];

@@ -43,6 +43,30 @@
                 @endif
             </section>
 
+            @if($advance->payoutTransaction)
+                <section class="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+                    <h2 class="font-semibold text-emerald-950">Informasi pencairan</h2>
+                    <dl class="mt-4 grid gap-4 text-sm sm:grid-cols-2">
+                        <div><dt class="text-emerald-800">Nominal kas keluar</dt><dd class="mt-1 font-semibold">Rp {{ number_format((float) $advance->disbursed_amount, 2, ',', '.') }}</dd></div>
+                        <div><dt class="text-emerald-800">Rekening kas</dt><dd class="mt-1 font-medium">{{ $advance->payoutTransaction->sourceCashAccount?->name }}</dd></div>
+                        <div><dt class="text-emerald-800">Tanggal pencairan aktual</dt><dd class="mt-1">{{ $advance->disbursed_at?->format('d M Y H:i') }}</dd></div>
+                        <div><dt class="text-emerald-800">Dicatat oleh / waktu pencatatan</dt><dd class="mt-1">{{ $advance->payoutTransaction->poster?->name }} · {{ $advance->payoutTransaction->posted_at?->format('d M Y H:i') }}</dd></div>
+                        <div class="sm:col-span-2"><dt class="text-emerald-800">Transaksi cash ledger</dt><dd class="mt-1 font-medium">
+                            @can('transactions.view')
+                                <a href="{{ route('transactions.show', $advance->payoutTransaction) }}" class="underline">{{ $advance->payoutTransaction->number }}</a>
+                            @else
+                                {{ $advance->payoutTransaction->number }}
+                            @endcan
+                        </dd></div>
+                    </dl>
+                    <p class="mt-4 border-t border-emerald-200 pt-3 text-sm text-emerald-900">Pencairan dicatat sebagai kas keluar. Nilai ini bukan beban final pengeluaran.</p>
+                </section>
+            @endif
+
+            @if($advance->disbursed_at)
+                @include('operational-advances.settlements.history')
+            @endif
+
             <section class="rounded-xl border border-slate-200 bg-white p-5"><h2 class="font-semibold">Riwayat tindakan</h2><ol class="mt-4 space-y-4">@forelse($auditLogs as $entry)<li class="border-l-2 border-emerald-200 pl-4"><p class="text-sm font-medium">{{ $entry->description }}</p><p class="mt-1 text-xs text-slate-500">{{ $entry->user?->name ?? 'Sistem' }} · {{ $entry->created_at->format('d M Y H:i') }}</p>@if(data_get($entry->new_values, 'reason'))<p class="mt-2 whitespace-pre-line text-sm text-slate-600">{{ data_get($entry->new_values, 'reason') }}</p>@endif</li>@empty<li class="text-sm text-slate-500">Belum ada riwayat tindakan.</li>@endforelse</ol></section>
         </div>
 
@@ -60,7 +84,56 @@
                 </section>
             @endif
             @if($canCancel)<form method="POST" action="{{ route('operational-advances.cancel', $advance) }}" class="space-y-2 rounded-xl border border-slate-200 bg-white p-4">@csrf<label class="block text-sm font-medium">Alasan pembatalan<textarea name="reason" required rows="2" class="mt-1 w-full rounded-lg border-slate-300 text-sm"></textarea></label><button class="w-full rounded-lg border border-red-300 px-3 py-2 text-sm font-semibold text-red-900">Batalkan sebelum pencairan</button></form>@endif
-            @if($advance->status === 'approved')<p class="rounded-lg bg-sky-50 p-4 text-sm text-sky-900">Bon disetujui dan menunggu pencairan. Pencatatan kas belum tersedia pada Phase 3B.1.</p>@endif
+            @if($canDisburse)
+                <form method="POST" action="{{ route('operational-advances.disburse', $advance) }}" class="space-y-3 rounded-xl border border-sky-200 bg-white p-4">
+                    @csrf
+                    <h2 class="font-semibold">Pencairan bon</h2>
+                    <p class="text-sm text-slate-600">Nilai pencairan penuh: <strong>Rp {{ number_format((float) $advance->approved_amount, 2, ',', '.') }}</strong>. Pencairan akan dicatat sebagai kas keluar, bukan pengeluaran final.</p>
+                    <label class="block text-sm font-medium">Rekening kas aktif
+                        <select name="cash_account_id" required class="mt-1 w-full rounded-lg border-slate-300 text-sm">
+                            <option value="">Pilih rekening kas</option>
+                            @foreach($disbursementCashAccounts as $cashAccount)
+                                <option value="{{ $cashAccount->id }}" @selected((string) old('cash_account_id') === (string) $cashAccount->id)>{{ $cashAccount->name }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+                    <label class="block text-sm font-medium">Tanggal pencairan aktual
+                        <input type="datetime-local" name="occurred_at" value="{{ old('occurred_at', now()->format('Y-m-d\\TH:i')) }}" max="{{ now()->format('Y-m-d\\TH:i') }}" required class="mt-1 w-full rounded-lg border-slate-300 text-sm">
+                    </label>
+                    @can('transactions.negative_balance.override')
+                        <label class="flex items-start gap-2 text-sm text-slate-700"><input type="checkbox" name="allow_negative" value="1" @checked(old('allow_negative')) class="mt-1 rounded border-slate-300"><span>Izinkan saldo rekening menjadi negatif (override Phase 3A)</span></label>
+                        <label class="block text-sm font-medium">Alasan override<textarea name="override_reason" rows="2" class="mt-1 w-full rounded-lg border-slate-300 text-sm">{{ old('override_reason') }}</textarea></label>
+                    @endcan
+                    <button @disabled($disbursementCashAccounts->isEmpty()) class="w-full rounded-lg bg-emerald-800 px-3 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Cairkan penuh</button>
+                    @if($disbursementCashAccounts->isEmpty())<p class="text-xs text-amber-800">Tidak ada rekening kas aktif untuk pencairan.</p>@endif
+                </form>
+            @elseif($advance->status === 'approved')
+                <p class="rounded-lg bg-sky-50 p-4 text-sm text-sky-900">Bon disetujui dan menunggu pencairan oleh Keuangan Sarpras.</p>
+            @endif
+            @if($canCorrectPayout)
+                <form method="POST" action="{{ route('operational-advances.payout-correction', $advance) }}" class="space-y-3 rounded-xl border border-amber-200 bg-white p-4">
+                    @csrf
+                    <h2 class="font-semibold">Koreksi pencairan</h2>
+                    <p class="text-sm text-slate-600">Koreksi membalik transaksi payout lama dan membuat transaksi pengganti dengan nominal persetujuan yang sama.</p>
+                    <label class="block text-sm font-medium">Rekening kas aktif
+                        <select name="cash_account_id" required class="mt-1 w-full rounded-lg border-slate-300 text-sm">
+                            <option value="">Pilih rekening kas</option>
+                            @foreach($disbursementCashAccounts as $cashAccount)
+                                <option value="{{ $cashAccount->id }}" @selected((string) old('cash_account_id') === (string) $cashAccount->id)>{{ $cashAccount->name }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+                    <label class="block text-sm font-medium">Tanggal pencairan yang benar
+                        <input type="datetime-local" name="occurred_at" value="{{ old('occurred_at', $advance->disbursed_at?->format('Y-m-d\\TH:i')) }}" max="{{ now()->format('Y-m-d\\TH:i') }}" required class="mt-1 w-full rounded-lg border-slate-300 text-sm">
+                    </label>
+                    <label class="block text-sm font-medium">Alasan koreksi<textarea name="correction_reason" required minlength="5" rows="2" class="mt-1 w-full rounded-lg border-slate-300 text-sm">{{ old('correction_reason') }}</textarea></label>
+                    @can('transactions.negative_balance.override')
+                        <label class="flex items-start gap-2 text-sm text-slate-700"><input type="checkbox" name="allow_negative" value="1" @checked(old('allow_negative')) class="mt-1 rounded border-slate-300"><span>Izinkan saldo rekening menjadi negatif (override Phase 3A)</span></label>
+                        <label class="block text-sm font-medium">Alasan override<textarea name="override_reason" rows="2" class="mt-1 w-full rounded-lg border-slate-300 text-sm">{{ old('override_reason') }}</textarea></label>
+                    @endcan
+                    <button @disabled($disbursementCashAccounts->isEmpty()) class="w-full rounded-lg bg-amber-700 px-3 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Koreksi dengan reversal</button>
+                </form>
+            @endif
         </aside>
     </div>
 @endsection

@@ -15,6 +15,7 @@ class TransactionNumberGenerator
             'expense' => 'EXP',
             'income' => 'INC',
             'transfer' => 'TRF',
+            'advance_payout' => 'BPD',
             default => throw new InvalidArgumentException('Jenis transaksi tidak didukung.'),
         };
         $period = CarbonImmutable::parse($occurredAt)->format('Ym');

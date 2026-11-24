@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 use LogicException;
 
@@ -118,6 +119,14 @@ class OperationalAdvance extends Model
     public function settlements(): HasMany
     {
         return $this->hasMany(AdvanceSettlement::class);
+    }
+
+    public function payoutTransaction(): HasOne
+    {
+        return $this->hasOne(Transaction::class)
+            ->where('type', 'advance_payout')
+            ->where('status', 'posted')
+            ->latestOfMany('id');
     }
 
     public function attachments(): HasMany

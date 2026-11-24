@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\DepartmentController;
 use App\Http\Controllers\Admin\MasterDataController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\AdvanceSettlementController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\CashflowController;
 use App\Http\Controllers\OpeningBalanceController;
@@ -51,6 +52,18 @@ Route::middleware(['auth', 'active'])->group(function (): void {
     Route::post('/operational-advances/{operationalAdvance}/review', [OperationalAdvanceController::class, 'review'])->name('operational-advances.review');
     Route::post('/operational-advances/{operationalAdvance}/approve', [OperationalAdvanceController::class, 'approve'])->name('operational-advances.approve');
     Route::post('/operational-advances/{operationalAdvance}/cancel', [OperationalAdvanceController::class, 'cancel'])->name('operational-advances.cancel');
+    Route::post('/operational-advances/{operationalAdvance}/disburse', [OperationalAdvanceController::class, 'disburse'])->name('operational-advances.disburse');
+    Route::post('/operational-advances/{operationalAdvance}/payout-correction', [OperationalAdvanceController::class, 'correctPayout'])->name('operational-advances.payout-correction');
+    Route::get('/operational-advances/{operationalAdvance}/settlements/create', [AdvanceSettlementController::class, 'create'])->name('operational-advances.settlements.create');
+    Route::post('/operational-advances/{operationalAdvance}/settlements', [AdvanceSettlementController::class, 'store'])->name('operational-advances.settlements.store');
+    Route::get('/operational-advances/{operationalAdvance}/settlements/items/{item}/revisions/create', [AdvanceSettlementController::class, 'createRevision'])->name('operational-advances.settlement-items.revisions.create');
+    Route::post('/operational-advances/{operationalAdvance}/settlements/items/{item}/revisions', [AdvanceSettlementController::class, 'revise'])->name('operational-advances.settlement-items.revisions.store');
+    Route::post('/operational-advances/{operationalAdvance}/settlements/{advanceSettlement}/items/{item}/review', [AdvanceSettlementController::class, 'reviewItem'])->name('operational-advances.settlement-items.review');
+    Route::post('/operational-advances/{operationalAdvance}/settlements/{advanceSettlement}/reject', [AdvanceSettlementController::class, 'rejectBatch'])->name('operational-advances.settlements.reject');
+    Route::post('/operational-advances/{operationalAdvance}/settlements/items/{item}/adjustments', [AdvanceSettlementController::class, 'requestAdjustment'])->name('operational-advances.settlement-items.adjustments.store');
+    Route::post('/operational-advances/{operationalAdvance}/settlements/items/{item}/adjustments/{adjustmentGroupId}/review', [AdvanceSettlementController::class, 'reviewAdjustment'])->name('operational-advances.settlement-items.adjustments.review');
+    Route::get('/operational-advances/{operationalAdvance}/settlements/{advanceSettlement}/items/{item}/attachments/{attachment}/{mode?}', [AdvanceSettlementController::class, 'attachment'])
+        ->whereIn('mode', ['preview', 'download'])->name('operational-advances.settlement-attachments');
     Route::get('/operational-advances/{operationalAdvance}', [OperationalAdvanceController::class, 'show'])->name('operational-advances.show');
     Route::post('/cash-accounts/opening-balances', [OpeningBalanceController::class, 'store'])->name('cash-accounts.opening-balances.store');
     Route::post('/cash-accounts/opening-balances/{openingBalanceRequest:public_id}/review', [OpeningBalanceController::class, 'review'])->name('cash-accounts.opening-balances.review');

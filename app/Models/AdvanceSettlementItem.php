@@ -12,7 +12,7 @@ use LogicException;
 
 #[Fillable([
     'advance_settlement_id', 'replaces_item_id', 'occurred_at', 'description', 'category_id', 'subcategory_id',
-    'activity_id', 'vendor_id', 'amount', 'review_status', 'reviewed_by', 'reviewed_at', 'review_reason',
+    'activity_id', 'vendor_id', 'amount', 'review_status', 'reviewed_by', 'reviewed_at', 'review_reason', 'submitted_by',
 ])]
 class AdvanceSettlementItem extends Model
 {
@@ -59,6 +59,11 @@ class AdvanceSettlementItem extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    public function submitter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'submitted_by');
     }
 
     public function category(): BelongsTo

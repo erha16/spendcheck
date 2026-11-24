@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'operational_advance_id', 'batch_number', 'status', 'submitted_by', 'submitted_at', 'reviewed_by', 'reviewed_at', 'review_notes',
+    'operational_advance_id', 'batch_number', 'status', 'submitted_by', 'submitted_at', 'reviewed_by', 'reviewed_at', 'review_notes', 'submission_key',
 ])]
 class AdvanceSettlement extends Model
 {

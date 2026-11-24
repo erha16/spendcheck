@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
-#[Fillable(['type', 'occurred_at', 'description', 'notes', 'responsible_user_id', 'payment_method_id', 'source_cash_account_id', 'destination_cash_account_id', 'vendor_id', 'fund_source_id'])]
+#[Fillable(['type', 'occurred_at', 'description', 'notes', 'responsible_user_id', 'payment_method_id', 'source_cash_account_id', 'destination_cash_account_id', 'vendor_id', 'fund_source_id', 'operational_advance_id'])]
 class Transaction extends Model
 {
     /** @use HasFactory<TransactionFactory> */
@@ -108,6 +108,11 @@ class Transaction extends Model
     public function fundSource(): BelongsTo
     {
         return $this->belongsTo(FundSource::class);
+    }
+
+    public function operationalAdvance(): BelongsTo
+    {
+        return $this->belongsTo(OperationalAdvance::class);
     }
 
     public function reversalOf(): BelongsTo
