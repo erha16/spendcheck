@@ -13,6 +13,10 @@
             <p class="mt-1 text-xs text-slate-500">Manajemen pengeluaran operasional</p>
             <nav class="mt-8 flex gap-2 overflow-x-auto lg:flex-col">
                 <a href="{{ route('dashboard') }}" class="rounded-lg px-3 py-2 text-sm hover:bg-emerald-50">Dashboard</a>
+                @can('transactions.view')<a href="{{ route('transactions.index') }}" class="rounded-lg px-3 py-2 text-sm hover:bg-emerald-50">Transaksi</a>@endcan
+                @can('transactions.review')<a href="{{ route('transactions.review-queue') }}" class="rounded-lg px-3 py-2 text-sm hover:bg-emerald-50">Pemeriksaan</a>@endcan
+                @can('cashflow.view')<a href="{{ route('cashflow.index') }}" class="rounded-lg px-3 py-2 text-sm hover:bg-emerald-50">Cashflow</a>@endcan
+                @if(auth()->user()->can('operational_advances.view') || auth()->user()->can('operational_advances.view_own'))<a href="{{ route('operational-advances.index') }}" class="rounded-lg px-3 py-2 text-sm hover:bg-emerald-50">Bon operasional</a>@endif
                 @can('users.view')<a href="{{ route('admin.users.index') }}" class="rounded-lg px-3 py-2 text-sm hover:bg-emerald-50">Pengguna</a>@endcan
                 @can('departments.view')<a href="{{ route('admin.departments.index') }}" class="rounded-lg px-3 py-2 text-sm hover:bg-emerald-50">Unit kerja</a>@endcan
                 @foreach(['categories' => ['categories.view', 'Kategori'], 'subcategories' => ['subcategories.view', 'Subkategori'], 'activities' => ['activities.view', 'Kegiatan'], 'vendors' => ['vendors.view', 'Vendor'], 'cash-accounts' => ['cash_accounts.view', 'Akun kas'], 'fund-sources' => ['fund_sources.view', 'Sumber dana'], 'payment-methods' => ['payment_methods.view', 'Metode pembayaran']] as $resource => [$permission, $label])
@@ -34,5 +38,6 @@
             </main>
         </div>
     </div>
+@stack('scripts')
 </body>
 </html>
